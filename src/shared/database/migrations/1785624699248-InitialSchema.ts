@@ -11,7 +11,7 @@ export class InitialSchema1785624699248 implements MigrationInterface {
       `CREATE TABLE \`stock_movements\` (\`id\` int NOT NULL AUTO_INCREMENT, \`delta\` int NOT NULL, \`reason\` enum ('received', 'order_allocated', 'order_compensated', 'manual_adjustment') NOT NULL, \`orderId\` int NULL, \`createdAt\` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), \`stockItemId\` int NOT NULL, PRIMARY KEY (\`id\`)) ENGINE=InnoDB`,
     );
     await queryRunner.query(
-      `CREATE TABLE \`stock_items\` (\`id\` int NOT NULL AUTO_INCREMENT, \`quantityOnHand\` int UNSIGNED NOT NULL, \`version\` int NOT NULL, \`productId\` int NOT NULL, \`warehouseId\` int NOT NULL, UNIQUE INDEX \`IDX_4d037ebc35ca4cd4a394c9df54\` (\`productId\`, \`warehouseId\`), PRIMARY KEY (\`id\`)) ENGINE=InnoDB`,
+      `CREATE TABLE \`stock_items\` (\`id\` int NOT NULL AUTO_INCREMENT, \`quantityOnHand\` int UNSIGNED NOT NULL, \`version\` int NOT NULL DEFAULT 1, \`productId\` int NOT NULL, \`warehouseId\` int NOT NULL, UNIQUE INDEX \`IDX_4d037ebc35ca4cd4a394c9df54\` (\`productId\`, \`warehouseId\`), PRIMARY KEY (\`id\`)) ENGINE=InnoDB`,
     );
     await queryRunner.query(
       `CREATE TABLE \`products\` (\`id\` int NOT NULL AUTO_INCREMENT, \`sku\` varchar(255) NOT NULL, \`name\` varchar(255) NOT NULL, \`description\` text NULL, \`currentPrice\` decimal(10,2) NOT NULL, \`isActive\` tinyint NOT NULL DEFAULT 1, \`updatedAt\` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), \`createdAt\` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), UNIQUE INDEX \`IDX_c44ac33a05b144dd0d9ddcf932\` (\`sku\`), PRIMARY KEY (\`id\`)) ENGINE=InnoDB`,

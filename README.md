@@ -1,98 +1,174 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Project Scope — Makhzan Order & Inventory System
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+> **Status:** Approved · **Last updated:** 2026-07-27
+> A backend system that processes customer orders against real inventory without
+> overselling stock or double-charging customers.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 1. The Problem
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Makhzan is an online retailer selling electronics and office supplies. Its current
+system accepts orders for products that are not actually in stock, and charges
+customers twice when they submit the checkout request more than once.
 
-## Project setup
+The root cause is that stock verification and stock deduction happen as two
+separate steps with no protection against concurrent execution, and there is no
+mechanism guaranteeing that a repeated checkout request is processed exactly once.
 
-```bash
-$ npm install
-```
+The cost surfaces as cancellations, returns, and manual refunds. It scales with
+traffic: normal load is ~500 orders/day, but promotional periods spike to
+~2,000 orders/hour — precisely when the failure rate is highest.
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## 2. Actors
 
-# watch mode
-$ npm run start:dev
+| Actor                  | Interaction                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Customer**           | Browses products, manages a cart, places and pays for orders, tracks order status.                                                                              |
+| **Operations staff**   | Views incoming orders, advances order status, adjusts stock levels when shipments arrive.                                                                       |
+| **Payment gateway**    | External system. Receives charge requests and calls back via webhook to report success or failure. Callbacks may arrive more than once, out of order, or never. |
+| **Background workers** | Internal, unattended processes. Release expired reservations, retry failed compensations, dispatch notifications, publish domain events.                        |
 
-# production mode
-$ npm run start:prod
-```
+> **Why workers are listed as an actor:** any process that can initiate a state
+> change is an actor. Omitting them here is how they get omitted from the design.
 
-## Run tests
+---
 
-```bash
-# unit tests
-$ npm run test
+## 3. The Critical Path
 
-# e2e tests
-$ npm run test:e2e
+The one flow this project exists to get right: **placing an order.** Each step is
+paired with its failure question, because the bugs we are fixing live in the
+failure paths, not the happy path.
 
-# test coverage
-$ npm run test:cov
-```
+| #   | Step (inside the system)                                            | Failure question                                             | Decision                                                                                                                                                                    |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Receive checkout request carrying a client-supplied idempotency key | What if the same request arrives twice?                      | The key is persisted with a uniqueness constraint. A duplicate returns the original result instead of creating new work.                                                    |
+| 2   | Load requested items and validate availability per line item        | What if a concurrent request read the same stock count?      | Availability is never trusted from a prior read. The check and the deduction are one atomic operation (step 3).                                                             |
+| 3   | Deduct stock and create the order in a single database transaction  | What if deduction succeeds and order creation fails?         | Both live in one transaction, so both commit or neither does. Deduction uses a conditional update that fails when insufficient stock exists, rather than a read-then-write. |
+| 4   | Request a charge from the payment gateway                           | What if the gateway times out and we don't know the outcome? | The gateway call happens **outside** the transaction. Unknown outcomes leave the order in `pending_payment` and are resolved by reconciliation, never by guessing.          |
+| 5   | Receive and process the payment webhook                             | What if it arrives twice, or never?                          | Webhooks are deduplicated by gateway event id. Orders stuck in `pending_payment` past a timeout are reconciled by a scheduled worker.                                       |
+| 6   | Advance order status and notify the customer                        | What if the email fails to send?                             | Notification failure never affects order state. Notifications are queued, retried independently, and dead-lettered on permanent failure.                                    |
 
-## Deployment
+**On payment failure (step 5):** stock was already deducted in step 3, so it must
+be returned. This is a **compensating transaction** — a reversing operation that
+restores consistency. It is owned by a background worker reacting to a persisted
+`PaymentFailed` event, never by the HTTP request, because the request may be gone.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 4. In Scope
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+1. **Product catalogue with per-warehouse stock** — read-only for customers, quantity-adjustable by operations staff.
+2. **Cart management** — add, update quantity, remove. Carts hold no stock reservation.
+3. **Idempotent checkout** — the same idempotency key produces exactly one order and one charge.
+4. **Atomic stock allocation with quantity support** — validates and deducts a requested quantity per line item under concurrent load without going negative.
+5. **Order state machine** — explicit states and explicitly permitted transitions; illegal transitions are rejected.
+6. **Payment integration against a mock gateway** — charge request, webhook handling, deduplication, reconciliation of unknown outcomes.
+7. **Compensation on payment failure** — event-driven stock return, with retry until success.
+8. **Order status and history endpoints** — for customers and operations staff.
+9. **Stock adjustment endpoint** — for operations staff, producing an audit trail.
+10. **Notifications** — queued, retried, observable.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## 5. Explicitly Out of Scope
 
-Check out a few resources that may come in handy when working with NestJS:
+Each exclusion is a decision with a reason, not an omission.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+1. **A real payment gateway.** A mock gateway simulating success, failure, and
+   timeout is used instead. Real integration is compliance and credentials work;
+   it adds nothing to the engineering problem, and the mock gives far better
+   control over failure scenarios — which is what we actually need to test.
 
-## Support
+2. **Any user interface.** The system is exposed as an OpenAPI-documented HTTP
+   API only. UI work would consume the time budget that should go into backend
+   depth, and it is not the strength being demonstrated.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+3. **Cart-time stock reservation (soft allocation).** Stock is committed at
+   confirmation, not when items enter the cart. Reserving on add-to-cart freezes
+   inventory for customers who may never convert. The trade-off is accepted
+   consciously: it concentrates all contention into the confirmation moment,
+   which is exactly where the concurrency control is built.
 
-## Stay in touch
+4. **Discounts, coupons, and promotions.** Pricing rules are a separate problem
+   domain with their own complexity. They would inflate scope without touching
+   consistency or concurrency.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+5. **Returns and refunds.** Post-delivery reverse logistics is a second workflow
+   of comparable size to the entire critical path. Payment-failure compensation
+   already demonstrates the reversal pattern.
 
-## License
+6. **Search, filtering, and recommendations.** Listing and retrieval by id are
+   sufficient to exercise the order flow. Full-text search is an infrastructure
+   topic orthogonal to the problem statement.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+7. **Multiple payment methods.** Card only. Additional methods multiply
+   integration surface while re-testing the same state machine.
+
+8. **Shipping-carrier integration and rate calculation.** Status transitions are
+   driven manually by operations staff. Carrier APIs are third-party plumbing.
+
+9. **Reporting, analytics, and dashboards.** Aggregate reporting is a read-side
+   concern that would pull the project toward breadth instead of depth.
+
+10. **Multi-tenancy.** The system serves one retailer. Tenant isolation is a
+    different architectural problem and would obscure this one.
+
+### Deliberate simplifications
+
+- **Two warehouses are modelled, one allocation strategy.** Stock is tracked per
+  warehouse because the business genuinely holds it that way and removing it
+  would make the inventory arithmetic unrealistically simple. Allocation always
+  draws from the warehouse with sufficient stock, nearest-first by fixed
+  priority. Split-shipment across warehouses is out of scope.
+- **No guest checkout.** All orders belong to an authenticated customer, which
+  keeps ownership and authorization unambiguous.
+
+---
+
+## 6. Definition of Done
+
+The project is complete when all six statements below are independently
+verifiable by someone other than the author.
+
+1. **No oversell under load.** A k6 load test sustaining 2,000 orders/hour
+   against limited stock completes with zero negative stock rows and zero
+   confirmed orders exceeding available quantity.
+
+2. **Exactly-once checkout.** Submitting the same checkout request 10 times
+   concurrently with one idempotency key yields exactly one order and one charge,
+   proven by an automated test.
+
+3. **Compensation is durable.** An integration test that fails a payment
+   asserts stock returns to its pre-order level within 60 seconds, and still
+   succeeds when the worker process is killed and restarted mid-compensation.
+
+4. **Failure paths are covered.** Every failure question in section 3 has a
+   corresponding test. Domain and application layer coverage exceeds 70%.
+
+5. **The system is observable.** Every request carries a correlation id through
+   logs; health checks, queue depth, and order-state counts are exposed as
+   metrics.
+
+6. **It is deployed and legible.** Running publicly via a CI/CD pipeline, with a
+   README stating the problem and the trade-offs, an OpenAPI specification, an
+   architecture diagram, and a `docs/adr` directory recording each significant
+   decision.
+
+---
+
+## Glossary
+
+| Term                         | Meaning                                                                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Oversell**                 | Confirming an order for stock that does not exist.                                                                                                               |
+| **Idempotency**              | Repeating an operation produces the same result as performing it once.                                                                                           |
+| **Soft allocation**          | Temporary reservation with an expiry. Not used here.                                                                                                             |
+| **Hard allocation**          | Permanent deduction at confirmation. Used here.                                                                                                                  |
+| **Compensating transaction** | A reversing operation that restores consistency after a later step fails.                                                                                        |
+| **Saga**                     | A sequence of local transactions coordinated by events, each with a compensation.                                                                                |
+| **Eventual consistency**     | The system converges to a consistent state, but not instantaneously.                                                                                             |
+| **Transactional outbox**     | Persisting events in the same transaction as the state change, then publishing them separately, so an event is never lost or published for a rolled-back change. |
+| **Dead letter queue**        | Where messages go after exhausting retries, for manual inspection.                                                                                               |

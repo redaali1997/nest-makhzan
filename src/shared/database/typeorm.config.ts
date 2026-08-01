@@ -14,7 +14,7 @@ export const buildDataSourceOptions = (opts: {
   type: 'mysql',
   ...opts,
   entities: [Product, StockItem, StockMovement, Warehouse],
-  migrations: [__dirname + '/shared/database/migrations/*{.ts,.js}'],
+  migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
   migrationsRun: false,
 });
