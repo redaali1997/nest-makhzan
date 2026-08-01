@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { validateEnv } from './shared/config/env.validation';
 import databaseConfig from './shared/config/database.config';
@@ -29,7 +27,5 @@ import { buildDataSourceOptions } from './shared/database/typeorm.config';
     CatalogModule,
     InventoryModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

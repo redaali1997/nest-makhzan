@@ -34,6 +34,7 @@ export class StockMovement {
   reason: StockMovementReason;
 
   @Column({ type: 'int', nullable: true })
+  @Index()
   orderId: number | null;
 
   @CreateDateColumn()
