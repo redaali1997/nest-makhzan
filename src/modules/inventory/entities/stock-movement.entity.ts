@@ -9,7 +9,7 @@ import {
 import { StockItem } from './stock-item.entity';
 
 export enum StockMovementReason {
-  RECEIVED = 'received', // شحنة داخلة
+  RECEIVED = 'received',
   ORDER_ALLOCATED = 'order_allocated',
   ORDER_COMPENSATED = 'order_compensated',
   MANUAL_ADJUSTMENT = 'manual_adjustment',

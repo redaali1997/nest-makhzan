@@ -6,10 +6,10 @@ COPY package*.json .
 
 RUN npm ci
 
+USER node
+
 COPY . .
 
 EXPOSE 3000
-
-USER node
 
 CMD [ "npm", "run", "start:dev" ]

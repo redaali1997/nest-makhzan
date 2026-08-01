@@ -19,7 +19,7 @@ export class Warehouse {
   @Column({ unique: true })
   code: string;
 
-  @Column()
+  @Column({ unique: true })
   priority: number;
 
   @OneToMany(() => StockItem, (stockItem) => stockItem.warehouse)

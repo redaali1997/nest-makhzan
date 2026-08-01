@@ -1,11 +1,13 @@
 import { Product } from '../../catalog/entities/product.entity';
 import {
   Column,
+  CreateDateColumn,
   Entity,
   Index,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
   VersionColumn,
 } from 'typeorm';
 import { Warehouse } from './warehouse.entity';
@@ -37,4 +39,10 @@ export class StockItem {
 
   @OneToMany(() => StockMovement, (movements) => movements.stockItem)
   movements: StockMovement[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
