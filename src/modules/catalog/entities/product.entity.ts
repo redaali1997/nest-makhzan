@@ -1,4 +1,4 @@
-import { StockItem } from 'src/modules/inventory/entities/stock-item.entity';
+import { StockItem } from '../../inventory/entities/stock-item.entity';
 import {
   Column,
   CreateDateColumn,
@@ -20,7 +20,7 @@ export class Product {
   name: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({
     type: 'decimal',

@@ -10,6 +10,7 @@ import appConfig from './shared/config/app.config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { buildDataSourceOptions } from './shared/database/typeorm.config';
 
 @Module({
   imports: [
@@ -21,15 +22,8 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     TypeOrmModule.forRootAsync({
       inject: [databaseConfig.KEY],
       useFactory: (db: ConfigType<typeof databaseConfig>) => ({
-        type: 'mysql',
-        host: db.host,
-        port: db.port,
-        database: db.database,
-        username: db.username,
-        password: db.password,
+        ...buildDataSourceOptions(db),
         autoLoadEntities: true,
-        synchronize: false,
-        migrations: [__dirname + '/shared/database/migrations/*{.ts,.js}'],
       }),
     }),
     CatalogModule,

@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -15,11 +16,15 @@ export enum StockMovementReason {
 }
 
 @Entity('stock_movements')
+@Index(['stockItem', 'createdAt'])
 export class StockMovement {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => StockItem, (stockItem) => stockItem.movements)
+  @ManyToOne(() => StockItem, (stockItem) => stockItem.movements, {
+    nullable: false,
+    onDelete: 'RESTRICT',
+  })
   stockItem: StockItem;
 
   @Column({ type: 'int' })
@@ -28,8 +33,8 @@ export class StockMovement {
   @Column({ type: 'enum', enum: StockMovementReason })
   reason: StockMovementReason;
 
-  @Column({ nullable: true })
-  orderId: number;
+  @Column({ type: 'int', nullable: true })
+  orderId: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -23,13 +23,16 @@ export class StockItem {
   })
   product: Product;
 
-  @ManyToOne(() => Warehouse, (warehouse) => warehouse.stockItems)
+  @ManyToOne(() => Warehouse, (warehouse) => warehouse.stockItems, {
+    nullable: false,
+    onDelete: 'RESTRICT',
+  })
   warehouse: Warehouse;
 
   @Column({ type: 'int', unsigned: true })
   quantityOnHand: number;
 
-  @VersionColumn()
+  @VersionColumn({ default: 1 })
   version: number;
 
   @OneToMany(() => StockMovement, (movements) => movements.stockItem)
