@@ -9,6 +9,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { buildDataSourceOptions } from './shared/database/typeorm.config';
+import { PaymentModule } from './modules/payment/payment.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { buildDataSourceOptions } from './shared/database/typeorm.config';
     }),
     CatalogModule,
     InventoryModule,
+    PaymentModule,
   ],
 })
 export class AppModule {}
