@@ -21,7 +21,6 @@ const envSchema = z.object({
 
 export type EnvVars = z.infer<typeof envSchema>;
 
-let validatedEnv: EnvVars;
 export function validateEnv(config: Record<string, unknown>): EnvVars {
   const result = envSchema.safeParse(config);
 
@@ -33,9 +32,5 @@ export function validateEnv(config: Record<string, unknown>): EnvVars {
     throw new Error(`\n[config] Invalid environment variables:\n${messages}\n`);
   }
 
-  validatedEnv = result.data;
-
-  return validatedEnv;
+  return result.data;
 }
-
-export const env = (): EnvVars => validatedEnv;

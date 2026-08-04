@@ -1,7 +1,8 @@
 import { registerAs } from '@nestjs/config';
-import { env } from './env.validation';
+import { validateEnv } from './env.validation';
 
 export default registerAs('redis', () => {
-  const e = env();
-  return { host: e.REDIS_HOST, port: e.REDIS_PORT };
+  const env = validateEnv(process.env);
+
+  return { host: env.REDIS_HOST, port: env.REDIS_PORT };
 });

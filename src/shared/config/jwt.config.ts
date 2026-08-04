@@ -1,10 +1,10 @@
 import { registerAs } from '@nestjs/config';
-import { env } from './env.validation';
+import { validateEnv } from './env.validation';
 
 export default registerAs('jwt', () => {
-  const e = env();
+  const env = validateEnv(process.env);
 
   return {
-    secret: e.JWT_SECRET,
+    secret: env.JWT_SECRET,
   };
 });
