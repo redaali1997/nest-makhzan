@@ -27,7 +27,7 @@ import { PaymentModule } from './modules/payment/payment.module';
     }),
     CatalogModule,
     InventoryModule,
-    PaymentModule,
+    PaymentModule.forRoot({ mode: 'mock' }),
   ],
 })
 export class AppModule {}
