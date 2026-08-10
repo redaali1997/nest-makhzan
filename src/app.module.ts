@@ -27,7 +27,12 @@ import { PaymentModule } from './modules/payment/payment.module';
     }),
     CatalogModule,
     InventoryModule,
-    PaymentModule.forRoot({ mode: 'mock' }),
+    PaymentModule.forRootAsync({
+      useFactory: (config: ConfigType<typeof appConfig>) => ({
+        mode: config.env === 'test' ? 'failing' : 'mock',
+      }),
+      inject: [appConfig.KEY],
+    }),
   ],
 })
 export class AppModule {}
