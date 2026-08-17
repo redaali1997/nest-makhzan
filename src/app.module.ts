@@ -19,11 +19,11 @@ import { PaymentModule } from './modules/payment/payment.module';
       load: [databaseConfig, redisConfig, jwtConfig, appConfig],
     }),
     TypeOrmModule.forRootAsync({
-      inject: [databaseConfig.KEY],
       useFactory: (db: ConfigType<typeof databaseConfig>) => ({
         ...buildDataSourceOptions(db),
         autoLoadEntities: true,
       }),
+      inject: [databaseConfig.KEY],
     }),
     CatalogModule,
     InventoryModule,

@@ -17,4 +17,5 @@ export const buildDataSourceOptions = (opts: {
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
   migrationsRun: false,
+  logging: true,
 });
