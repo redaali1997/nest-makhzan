@@ -1,7 +1,4 @@
 import { DataSourceOptions } from 'typeorm';
-import { config } from 'dotenv';
-
-config();
 
 export const buildDataSourceOptions = (opts: {
   host: string;
@@ -9,6 +6,7 @@ export const buildDataSourceOptions = (opts: {
   username: string;
   password: string;
   database: string;
+  logging: boolean;
 }): DataSourceOptions => ({
   type: 'mysql',
   ...opts,
@@ -16,5 +14,4 @@ export const buildDataSourceOptions = (opts: {
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
   migrationsRun: false,
-  logging: process.env.NODE_ENV === 'development' ? true : false,
 });

@@ -10,5 +10,6 @@ export default registerAs('database', () => {
     database: env.DB_DATABASE,
     username: env.DB_USERNAME,
     password: env.DB_PASSWORD,
+    logging: env.NODE_ENV === 'development',
   };
 });
