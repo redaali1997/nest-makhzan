@@ -10,6 +10,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { buildDataSourceOptions } from './shared/database/typeorm.config';
 import { PaymentModule } from './modules/payment/payment.module';
+import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PaymentModule } from './modules/payment/payment.module';
       }),
       inject: [appConfig.KEY],
     }),
+    OrdersModule,
   ],
 })
 export class AppModule {}

@@ -1,8 +1,7 @@
-import { Product } from '../../modules/catalog/entities/product.entity';
-import { StockItem } from '../../modules/inventory/entities/stock-item.entity';
-import { StockMovement } from '../../modules/inventory/entities/stock-movement.entity';
-import { Warehouse } from '../../modules/inventory/entities/warehouse.entity';
 import { DataSourceOptions } from 'typeorm';
+import { config } from 'dotenv';
+
+config();
 
 export const buildDataSourceOptions = (opts: {
   host: string;
@@ -13,9 +12,9 @@ export const buildDataSourceOptions = (opts: {
 }): DataSourceOptions => ({
   type: 'mysql',
   ...opts,
-  entities: [Product, StockItem, StockMovement, Warehouse],
+  entities: [__dirname + '/../../modules/**/entities/*.entity{.ts,.js}'],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
   migrationsRun: false,
-  logging: true,
+  logging: process.env.NODE_ENV === 'development' ? true : false,
 });
